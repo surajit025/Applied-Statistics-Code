@@ -1,0 +1,147 @@
+install.packages("BBmisc")
+install.packages("dplyr")
+install.packages("jtools")
+install.packages("forecast")
+install.packages("moments")
+install.packages("broom.mixed")
+install.packages("summarytools")
+install.packages("PerformanceAnalytics")
+##Arctic Sea Ice Analysis with CO2 emission and Global Temperature##
+setwd("C:/Users/HP/Desktop/Applied Stat Dataset")
+##### INPUTTING DATA INTO R & DATA PREPROCESSING #####
+Global_Avg_Temp <- read.csv("Global_Avg_Temp.csv", sep = ",", header = TRUE)
+CO2_emissions <- read.csv("CO2emissions.csv", sep = ",", header = TRUE)
+Arctic_Sea_Ice<- read.csv("Arctic Sea Ice Minimum.csv", sep = ",", header = TRUE)
+#Data Pre-processing for Arctic Sea Ice Dataset
+Arctic_Sea_Ice_Columns <- subset.data.frame(Arctic_Sea_Ice,select =
+                                              c(year,extent,area))
+colnames (Arctic_Sea_Ice_Columns) <- c("year", "extent","area")
+Arctic_Sea_Ice_Columns$year <- as.integer(Arctic_Sea_Ice_Columns$year)
+Arctic_Sea_Ice_year_mean <-Arctic_Sea_Ice_Columns %>% group_by(year) %>% summarise_each(funs(mean))
+
+#Data Pre-processing for Global_Avg_Temp Dataset
+Global_Avg_Temp_Columns <- subset.data.frame(Global_Avg_Temp,select =
+                                               c(year,temperature))
+colnames (Global_Avg_Temp_Columns) <- c("year", "temperature")
+#Data Pre-processing for CO2_emissions Dataset
+CO2_emissions_Columns <- subset.data.frame(CO2_emissions,select =
+                                             c(year,Monthly_average))
+colnames (CO2_emissions_Columns) <- c("year", "Monthly_average")
+#--------------------------------
+Global_Avg_Temp_1880_1949 <- filter(Global_Avg_Temp_Columns, (year>= 1880 & year <= 1949))
+Global_Avg_Temp_1950_2002 <- filter(Global_Avg_Temp_Columns, (year>= 1950 & year <= 2002))
+Global_Avg_Temp_2003_2020 <- filter(Global_Avg_Temp_Columns, (year>= 2003 & year <= 2020))
+Arctic_Sea_Ice_year_mean_03_20 <- filter(Arctic_Sea_Ice_year_mean, (year>= 2003 & year <= 2020))
+CO2_emissions_2003_2020 <- filter(CO2_emissions_Columns, (year>= 2003 & year <= 2020))
+Global_temp_Arctic_Sea_03_20_mean <- inner_join(Global_Avg_Temp_2003_2020, 
+                                                Arctic_Sea_Ice_year_mean_03_20, 
+                                                by = "year")
+Global_temp_Arctic_Sea_CO2_03_20 <- inner_join(Global_temp_Arctic_Sea_03_20_mean, 
+                                               CO2_emissions_2003_2020,
+                                               by = "year")
+write.csv(Global_temp_Arctic_Sea_CO2_03_20,
+          "Global_temp_Arctic_Sea_CO2_03_20.csv")
+##### 1- Descriptive Statistics #####
+Data_03_20 = Global_temp_Arctic_Sea_CO2_03_20
+colnames(Data_03_20)=c("year", "temperature", "extent",
+                       "area","Monthly_average")
+install.packages("descr")
+library("descr")
+
+library ("BBmisc")
+library("dplyr")
+library("jtools")
+library("forecast")
+library ("moments")
+install.packages("pastecs")
+library("pastecs")
+stat.desc(Data_03_20)
+#---------------------------
+attach(Data_03_20)
+hist(temperature, col ="red", main ="temperature") 
+hist(Monthly_average, col ="yellow", main ="Monthly_average") 
+hist(extent, col ="green", main ="extent") 
+hist(area, col ="blue", main ="area") 
+boxplot(extent, col = "green", main ="extent")
+boxplot(temperature, col ="red", main ="temperature")
+boxplot(Monthly_average, col ="yellow", main ="Monthly_average")
+##### 2- correlation #####
+chart.Correlation(Data_03_20[,-1], histogram=T, pch="+")
+##### 3- Regression #####
+myData <- Data_03_20 %>% mutate(year = factor(year))
+myNorm <- normalize(myData, method="range", range = c(0,1), margin = 1)
+myNorm
+## A- simple regression 
+model1 = lm (myNorm$extent~myNorm$temperature)
+summ(model1,confint = TRUE, digits = 3)
+# check normality (Shapiro-Wilk test)
+qqnorm(model1$residuals); qqline(model1$residuals,col=2)
+shapiro.test(model1$residuals)
+# check Equal variance / Homoscedasticity 
+plot(model1$fitted.values, model1$residuals )
+abline(0,0,  col = 3)
+#------------------------------
+model2 = lm (myNorm$area ~ myNorm$Monthly_average)
+summ(model2)
+# check normality (Shapiro-Wilk test)
+qqnorm(model2$residuals); 
+qqline(model2$residuals,col=2)
+shapiro.test(model2$residuals)
+# check Equal variance / Homoscedasticity 
+plot(model2$fitted.values, model2$residuals )
+abline(0,0,  col = 3)
+#----- The final model
+## We will suggest a new model based on a new variable:
+#   New variable = Sum of the two independent variables
+model3 = lm (myNorm$temperature ~ myNorm$Monthly_average)
+
+summ(model3)
+
+# check normality (Shapiro-Wilk test)
+
+qqnorm(model3$residuals); qqline(model3$residuals,col=2)
+
+shapiro.test(model3$residuals)
+
+# check Equal variance / Homoscedasticity 
+
+plot(model3$fitted.values, model3$residuals )
+
+abline(0,0,  col = 3)
+##### 4- Time series forecasting #####
+# Global Temperature
+ts.fit1= auto.arima(ts(Data_03_20$temperature, 2003, 2020), ic="bic")
+
+ts.fit1
+# check the residuals
+checkresiduals(ts.fit1,lag=10)
+# forecast 4 years (from 2020 to 2023 )
+forecast(ts.fit1,h=3)
+
+plot(forecast(ts.fit1,h=3))
+# CO2 emission
+
+ts.fit2= auto.arima(ts(Data_03_20$Monthly_average, 2003, 2020), ic="bic")
+
+ts.fit2
+
+# check the residuals
+checkresiduals(ts.fit2,lag=10)
+
+# forecast 4 years (from 2020 to 2023 )
+forecast(ts.fit2,h=3)
+
+plot(forecast(ts.fit2,h=3))
+#ARctic Sea Ice
+
+ts.fit3= auto.arima(ts(Data_03_20$area, 2003, 2020), ic="bic")
+
+ts.fit3
+
+# check the residuals
+checkresiduals(ts.fit3,lag=10)
+
+# forecast 4 years (from 2020 to 2023 )
+forecast(ts.fit3,h=3)
+
+plot(forecast(ts.fit3,h=3))
